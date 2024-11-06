@@ -1,7 +1,9 @@
-package com.storage;
+package com.storage.client;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+
+import com.storage.server.PasswordManager;
 
 public class PasswordManagerClient {
     public static void main(String[] args) {

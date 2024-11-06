@@ -1,4 +1,4 @@
-package com.storage;
+package com.storage.server;
 
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
