@@ -176,6 +176,7 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     // PRINT SERVER
     @Override
     public void print(String filename, String printer, String username, String password) throws RemoteException {
+        System.out.println("This is the users in the database" + getAllUsers());
         if (!authenticateUser(username, password)) {
             System.out.println("Authentication failed for user: " + username);
             return;
