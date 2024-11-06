@@ -18,3 +18,8 @@ public interface PrintServer extends Remote {
     void stop() throws RemoteException;
     void restart() throws RemoteException;
 }
+
+//TO RUN 
+// COMPILE: javac server/*.java client/*.java
+// TERMINAL 1 (SERVER): java -Djava.rmi.server.hostname=localhost server.ServerMain
+// TERMINAL 2 (CLIENT): java client.PrintClient   

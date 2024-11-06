@@ -149,3 +149,8 @@ public class PrintServerImpl extends UnicastRemoteObject implements PrintServer 
     }
     // Implement remote methods with authentication checks...
 }
+
+//TO RUN 
+// COMPILE: javac server/*.java client/*.java
+// TERMINAL 1 (SERVER): java -Djava.rmi.server.hostname=localhost server.ServerMain
+// TERMINAL 2 (CLIENT): java client.PrintClient   
