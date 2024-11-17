@@ -21,9 +21,9 @@ public interface PasswordManager extends Remote {
     void print(String filename, String printer, String sessionToken) throws RemoteException;
     void queue(String printer, String sessionToken) throws RemoteException;
     void topQueue(String printer, int job, String sessionToken) throws RemoteException;
-    void start() throws RemoteException;
-    void stop() throws RemoteException;
-    void restart() throws RemoteException;
+    void start(String sessionToken) throws RemoteException;
+    void stop(String sessionToken) throws RemoteException;
+    void restart(String sessionToken) throws RemoteException;
     void status(String printer, String sessionToken) throws RemoteException;
     void readConfig(String parameter, String sessionToken) throws RemoteException;
     void setConfig(String parameter, String value, String sessionToken) throws RemoteException;

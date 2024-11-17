@@ -9,8 +9,9 @@ public class PasswordManagerClient {
     public static void main(String[] args) {
         try {
             // Connect to the RMI registry and look up the PasswordManager service
-            Registry registry = LocateRegistry.getRegistry("localhost", 1099);
+            Registry registry = LocateRegistry.getRegistry("localhost", 1101);
             PasswordManager manager = (PasswordManager) registry.lookup("PasswordManager");
+
 
             // Check if the database is empty and clear it if it is not
             if (!manager.isDatabaseEmpty()) {
@@ -21,7 +22,7 @@ public class PasswordManagerClient {
             }
 
             // List of test users
-            String[] usernames = {"testUser1", "testUser2", "testUser3"};
+            String[] usernames = {"Alice", "Bob", "Cecilia", "Erica", "David","Fred","George"};
             String initialPassword = "password123";
             String newPassword = "newPassword456";
 

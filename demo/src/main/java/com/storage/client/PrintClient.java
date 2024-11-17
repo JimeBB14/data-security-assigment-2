@@ -9,10 +9,10 @@ public class PrintClient {
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-        String host = "localhost"; // or server IP
+      
         String sessionToken = null;
         try {
-            Registry registry = LocateRegistry.getRegistry(host);
+            Registry registry = LocateRegistry.getRegistry("localhost", 1101);
             PasswordManager printServer = (PasswordManager) registry.lookup("PasswordManager");
 
             while(true){
@@ -20,7 +20,8 @@ public class PrintClient {
                 String username = scanner.nextLine();
                 System.out.print("Enter password: ");
                 String password = scanner.nextLine();
-
+                
+                System.out.println("Debug: Attempting to log in with username: " + username);
                 sessionToken = printServer.login(username, password);
 
                 if (sessionToken == null) {

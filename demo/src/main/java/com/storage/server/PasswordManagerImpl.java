@@ -14,19 +14,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.storage.util.HashingUtil;
+
 public class PasswordManagerImpl extends UnicastRemoteObject implements PasswordManager {
     private static final String DB_URL = "jdbc:sqlite:user_management.db";
     @SuppressWarnings("unused")
     private boolean serverRunning = false;
-    private final long SESSION_TIMEOUT = 1 * 60 * 1000;
+    private final long SESSION_TIMEOUT = 5 * 60 * 1000;
     private Map<String, Long> activeSessions = new HashMap<>();
-    
+    private Map<String, String> sessionUserMap = new HashMap<>(); 
+
     protected PasswordManagerImpl() throws RemoteException {
         super();
         initializeDatabase();
     }
 
-    // Método para inicializar la base de datos y crear la tabla si no existe
     private void initializeDatabase() {
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
             String createTableSQL = "CREATE TABLE IF NOT EXISTS users (" +
@@ -40,12 +42,13 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         }
     }
 
-    // Método de conexión a la base de datos
+    // Database connection
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL);
     }
 
     private boolean validateSession(String sessionToken) throws RemoteException {
+        System.out.println("Debug: Validating session token: " + sessionToken);
         Long expirationTime = activeSessions.get(sessionToken);
 
         if (expirationTime == null) {
@@ -54,32 +57,43 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         }
 
         if (System.currentTimeMillis() > expirationTime) {
+            System.out.println("Debug: Session token expired: " + sessionToken);
             activeSessions.remove(sessionToken);
-            System.out.println("Session token expired: " + sessionToken);
+            sessionUserMap.remove(sessionToken);
             throw new RemoteException("Session expired. Please log in again.");
         }
 
-        // Fornyer utløpstid for aktiv sesjon
+        // Renew session expiration time
         activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
+        System.out.println("Session renewed for token: " + sessionToken);
         return true;
+    }
+
+    // Check if the user associated with the sessionToken has permission for the action
+    private void checkPermission(String sessionToken, String action) throws RemoteException {
+        System.out.println("Debug: Checking permission for action: " + action + " with session token: " + sessionToken);
+        validateSession(sessionToken);
+        String username = sessionUserMap.get(sessionToken);
+
+        if (username == null || !PasswordManagerServer.hasPermission(username, action)) {
+            System.out.println("Debug: Access denied for user: " + username + " for action: " + action);
+            throw new RemoteException("Access Denied: " + username + " does not have permission for action " + action);
+        }
     }
 
     @Override
     public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
         String query = "SELECT password FROM users WHERE username = ?";
-
         try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
-
+             PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setString(1, username);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    String storedPassword = rs.getString("password");
-                    boolean passwordsMatch = plainPassword.equals(storedPassword);
-                    return passwordsMatch;
+                    String storedPassword = rs.getString("password"); // Retrieve hashed password
+                    return HashingUtil.validatePassword(plainPassword, storedPassword);
                 } else {
                     System.out.println("Debug: User was not found in the database.");
-            }
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error during authentication.");
@@ -90,17 +104,18 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
 
     @Override
     public boolean updatePassword(String username, String oldPassword, String newPassword) throws RemoteException {
-        if (authenticateUser(username, oldPassword)) { // Verificación con contraseña
+        if (authenticateUser(username, oldPassword)) {
             String query = "UPDATE users SET password = ? WHERE username = ?";
-
             try (Connection conn = getConnection();
-                    PreparedStatement stmt = conn.prepareStatement(query)) {
-
-                stmt.setString(1, newPassword); // Guarda la nueva contraseña en texto plano
+                 PreparedStatement stmt = conn.prepareStatement(query)) {
+                // Hash the new password
+                byte[] salt = HashingUtil.generateSalt();
+                String hashedPassword = HashingUtil.hashPassword(newPassword, salt);
+                // Update the password
+                stmt.setString(1, hashedPassword);
                 stmt.setString(2, username);
                 int rowsAffected = stmt.executeUpdate();
-
-                return rowsAffected > 0; // True si la actualización fue exitosa
+                return rowsAffected > 0;
             } catch (SQLException e) {
                 System.err.println("Error updating password.");
                 e.printStackTrace();
@@ -110,37 +125,39 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         }
         return false;
     }
+    
 
-    @Override
-    public boolean addUser(String username, String password) throws RemoteException {
-        String query = "INSERT INTO users (username, password) VALUES (?, ?)";
-
-        try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
-
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            int rowsAffected = stmt.executeUpdate();
-
-            return rowsAffected > 0; // Devuelve true si se insertó el usuario
-        } catch (SQLException e) {
-            System.err.println("Error adding user.");
-            e.printStackTrace();
-            return false;
-        }
+   @Override
+public boolean addUser(String username, String password) throws RemoteException {
+    String query = "INSERT INTO users (username, password) VALUES (?, ?)";
+    try (Connection conn = getConnection();
+         PreparedStatement stmt = conn.prepareStatement(query)) {
+        // Hash the password
+        byte[] salt = HashingUtil.generateSalt();
+        String hashedPassword = HashingUtil.hashPassword(password, salt);
+        // Store the username and hashed password
+        stmt.setString(1, username);
+        stmt.setString(2, hashedPassword);
+        int rowsAffected = stmt.executeUpdate();
+        return rowsAffected > 0;
+    } catch (SQLException e) {
+        System.err.println("Error adding user.");
+        e.printStackTrace();
+        return false;
     }
+}
 
     @Override
     public boolean deleteUser(String username) throws RemoteException {
         String query = "DELETE FROM users WHERE username = ?";
 
         try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
+             PreparedStatement stmt = conn.prepareStatement(query)) {
 
             stmt.setString(1, username);
             int rowsAffected = stmt.executeUpdate();
 
-            return rowsAffected > 0; // Devuelve true si se eliminó el usuario
+            return rowsAffected > 0;
         } catch (SQLException e) {
             System.err.println("Error deleting user.");
             e.printStackTrace();
@@ -151,9 +168,17 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     @Override
     public String login(String username, String password) throws RemoteException {
         if (authenticateUser(username, password)) {
+            activeSessions.entrySet().removeIf(entry -> sessionUserMap.get(entry.getKey()).equals(username));
+            sessionUserMap.values().removeIf(value -> value.equals(username));
+    
+            // Generate a new session token
             String sessionToken = UUID.randomUUID().toString();
             activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
+            sessionUserMap.put(sessionToken, username);
+    
             System.out.println("Login successful. Session token: " + sessionToken);
+            System.out.println("Debug: Attempting to log in with username: " + username);
+            System.out.println("Debug: Received session token: " + sessionToken);
             return sessionToken;
         }
         return null;
@@ -162,6 +187,7 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     @Override
     public void logout(String sessionToken) throws RemoteException {
         if (activeSessions.remove(sessionToken) != null) {
+            sessionUserMap.remove(sessionToken);
             System.out.println("Session " + sessionToken + " has been logged out.");
         } else {
             System.out.println("Invalid session token. Logout failed.");
@@ -173,8 +199,8 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         String query = "SELECT COUNT(*) AS total FROM users";
 
         try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query);
-                ResultSet rs = stmt.executeQuery()) {
+             PreparedStatement stmt = conn.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
 
             if (rs.next()) {
                 int total = rs.getInt("total");
@@ -192,7 +218,7 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         String query = "DELETE FROM users";
 
         try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
+             PreparedStatement stmt = conn.prepareStatement(query)) {
 
             stmt.executeUpdate();
             System.out.println("All users cleared from the database.");
@@ -208,8 +234,8 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         List<String> users = new ArrayList<>();
 
         try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query);
-                ResultSet rs = stmt.executeQuery()) {
+             PreparedStatement stmt = conn.prepareStatement(query);
+             ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
                 users.add(rs.getString("username"));
@@ -220,73 +246,64 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         }
         return users;
     }
-    // PRINT SERVER
-    @Override
-    public void print(String filename, String printer, String sessionToken) throws RemoteException {
-        System.out.println("This is the users in the database" + getAllUsers());
-        if (validateSession(sessionToken)) {
-            System.out.println("Printing " + filename + " on " + printer);
-        } else {
-            throw new RemoteException("Session expired or invalid.");
-        }
-    }
-    @Override
-    public void queue(String printer, String sessionToken) throws RemoteException {
-        if (validateSession(sessionToken)) {
-            System.out.println("Listing queue for printer: " + printer);
-        }
-        // For demo, just a static message; in a real scenario, return the actual queue
-        System.out.println("Current print jobs for " + printer + ": None"); // Placeholder
-    }
 
     @Override
-    public void topQueue(String printer, int job, String sessionToken) throws RemoteException {
-        if (validateSession(sessionToken)) {
-            System.out.println("Moving job " + job + " to the top of the queue for printer: " + printer);
-        }
-    }
+public void print(String filename, String printer, String sessionToken) throws RemoteException {
+    System.out.println("entro al print");
+    checkPermission(sessionToken, "print");
+    System.out.println("Printing " + filename + " on " + printer);
+}
 
-    @Override
-    public void start() throws RemoteException {
-        serverRunning = true;
-        System.out.println("Print server started.");
-    }
+@Override
+public void queue(String printer, String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "queue");
+    System.out.println("Listing queue for printer: " + printer);
+}
 
-    @Override
-    public void stop() throws RemoteException {
-        serverRunning = false;
-        System.out.println("Print server stopped.");
-    }
+@Override
+public void topQueue(String printer, int job, String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "topQueue");
+    System.out.println("Moving job " + job + " to the top of the queue for printer: " + printer);
+}
 
-    @Override
-    public void restart() throws RemoteException {
-        stop();
-        start();
-    }
+@Override
+public void start(String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "start");
+    serverRunning = true;
+    System.out.println("Print server started.");
+}
 
-    @Override
-    public void status(String printer, String sessionToken) throws RemoteException {
-        // Simulate printing status
-        if (validateSession(sessionToken)) {
-            System.out.println("Status of printer " + printer + ": Ready");
-        }
-    }
+@Override
+public void stop(String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "stop");
+    serverRunning = false;
+    System.out.println("Print server stopped.");
+}
 
-    @Override
-    public void readConfig(String parameter, String sessionToken) throws RemoteException {
-        // Simulate reading a configuration parameter
-        if (validateSession(sessionToken)) {
-            System.out.println("Config parameter " + parameter + ": value");
-        }
-    }
+@Override
+public void restart(String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "restart");
+    stop(sessionToken);
+    start(sessionToken);
+}
 
-    @Override
-    public void setConfig(String parameter, String value, String sessionToken) throws RemoteException {
-        // Simulate setting a configuration parameter
-        if (validateSession(sessionToken)) {
-            System.out.println("Setting config " + parameter + " to " + value);
-        }
-    }
 
+@Override
+public void status(String printer, String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "status");
+    System.out.println("Status of printer " + printer + ": Ready");
+}
+
+@Override
+public void readConfig(String parameter, String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "readConfig");
+    System.out.println("Config parameter " + parameter + ": value");
+}
+
+@Override
+public void setConfig(String parameter, String value, String sessionToken) throws RemoteException {
+    checkPermission(sessionToken, "setConfig");
+    System.out.println("Setting config " + parameter + " to " + value);
+}
 
 }
