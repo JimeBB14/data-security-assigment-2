@@ -2,6 +2,8 @@ package com.storage.server;
 
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -64,65 +66,67 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         return true;
     }
 
-    @Override
-    public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
-        String query = "SELECT password FROM users WHERE username = ?";
+    private String hashPassword(String plainPassword) {
+    try {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hash = digest.digest(plainPassword.getBytes());
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hash) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) hexString.append('0');
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    } catch (NoSuchAlgorithmException e) {
+        throw new RuntimeException("Error hashing password", e);
+    }
+}
 
-        try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
+@Override
+public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
+    String query = "SELECT password FROM users WHERE username = ?";
+    try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
+        stmt.setString(1, username);
+        try (ResultSet rs = stmt.executeQuery()) {
+            if (rs.next()) {
+                String storedPassword = rs.getString("password");
+                return hashPassword(plainPassword).equals(storedPassword); // Compare hashed passwords
+            }
+        }
+    } catch (SQLException e) {
+        System.err.println("Error during authentication.");
+        e.printStackTrace();
+    }
+    return false;
+}
 
-            stmt.setString(1, username);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String storedPassword = rs.getString("password");
-                    boolean passwordsMatch = plainPassword.equals(storedPassword);
-                    return passwordsMatch;
-                } else {
-                    System.out.println("Debug: User was not found in the database.");
-            }
-            }
+
+@Override
+public boolean updatePassword(String username, String oldPassword, String newPassword) throws RemoteException {
+    if (authenticateUser(username, oldPassword)) {
+        String query = "UPDATE users SET password = ? WHERE username = ?";
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setString(1, hashPassword(newPassword)); // Hash the new password
+            stmt.setString(2, username);
+            return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
-            System.err.println("Error during authentication.");
+            System.err.println("Error updating password.");
             e.printStackTrace();
         }
-        return false;
+    } else {
+        System.err.println("Old password is incorrect.");
     }
+    return false;
+}
+
 
     @Override
-    public boolean updatePassword(String username, String oldPassword, String newPassword) throws RemoteException {
-        if (authenticateUser(username, oldPassword)) { // Verificación con contraseña
-            String query = "UPDATE users SET password = ? WHERE username = ?";
-
-            try (Connection conn = getConnection();
-                    PreparedStatement stmt = conn.prepareStatement(query)) {
-
-                stmt.setString(1, newPassword); // Guarda la nueva contraseña en texto plano
-                stmt.setString(2, username);
-                int rowsAffected = stmt.executeUpdate();
-
-                return rowsAffected > 0; // True si la actualización fue exitosa
-            } catch (SQLException e) {
-                System.err.println("Error updating password.");
-                e.printStackTrace();
-            }
-        } else {
-            System.err.println("Old password is incorrect.");
-        }
-        return false;
-    }
-
-    @Override
-    public boolean addUser(String username, String password) throws RemoteException {
+    public boolean addUser(String username, String plainPassword) throws RemoteException {
         String query = "INSERT INTO users (username, password) VALUES (?, ?)";
-
-        try (Connection conn = getConnection();
-                PreparedStatement stmt = conn.prepareStatement(query)) {
-
+        try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setString(1, username);
-            stmt.setString(2, password);
-            int rowsAffected = stmt.executeUpdate();
-
-            return rowsAffected > 0; // Devuelve true si se insertó el usuario
+            stmt.setString(2, hashPassword(plainPassword)); // Store hashed password
+            return stmt.executeUpdate() > 0;
         } catch (SQLException e) {
             System.err.println("Error adding user.");
             e.printStackTrace();
