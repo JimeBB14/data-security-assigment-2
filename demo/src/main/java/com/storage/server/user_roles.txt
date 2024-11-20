@@ -1,7 +1,8 @@
 Alice: Manager
-Bob: Janitor, ServiceTechnician
 Cecilia: PowerUser
+Ida: PowerUser
+Henry: OrdinaryUser
 David: OrdinaryUser
 Erica: OrdinaryUser
 Fred: OrdinaryUser
-George: OrdinaryUser
+George: ServiceTechnician
