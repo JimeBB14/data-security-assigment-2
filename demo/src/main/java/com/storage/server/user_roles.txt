@@ -1,5 +1,5 @@
 Alice: Manager
-Bob: Technician
+Bob: Janitor, ServiceTechnician
 Cecilia: PowerUser
 David: OrdinaryUser
 Erica: OrdinaryUser

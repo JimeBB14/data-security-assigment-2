@@ -12,7 +12,7 @@ import java.util.Set;
 
 public class PasswordManagerServer {
     private static Map<String, Set<String>> rolePermissions = new HashMap<>();
-    private static Map<String, String> userRoles = new HashMap<>();
+    private static Map<String, Set<String>> userRoles = new HashMap<>();
     private static Map<String, Set<String>> aclPermissions = new HashMap<>();
     private static boolean useACL = false;
 
@@ -43,16 +43,21 @@ public class PasswordManagerServer {
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.startsWith("#") || line.trim().isEmpty()) continue;
-
+    
                 String[] parts = line.split(":");
                 String user = parts[0].trim();
-                String role = parts[1].trim();
-                userRoles.put(user, role);
+                String[] roles = parts[1].trim().split(",");
+                Set<String> roleSet = new HashSet<>();
+                for (String role : roles) {
+                    roleSet.add(role.trim());
+                }
+                userRoles.put(user, roleSet);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+    
 
     public static void loadACL(String filePath) {
         try (InputStream input = PasswordManagerServer.class.getClassLoader().getResourceAsStream(filePath);
@@ -80,11 +85,19 @@ public class PasswordManagerServer {
             Set<String> permissions = aclPermissions.get(user);
             return permissions != null && permissions.contains(action);
         } else {
-            String role = userRoles.get(user);
-            Set<String> permissions = rolePermissions.get(role);
-            return permissions != null && (permissions.contains(action) || permissions.contains("ALL"));
+            Set<String> roles = userRoles.get(user);
+            if (roles == null) return false;
+    
+            for (String role : roles) {
+                Set<String> permissions = rolePermissions.get(role);
+                if (permissions != null && (permissions.contains(action) || permissions.contains("ALL"))) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
+    
 
     public static void main(String[] args) {
         try {
