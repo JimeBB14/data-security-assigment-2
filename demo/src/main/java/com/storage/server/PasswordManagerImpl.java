@@ -49,22 +49,22 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         return DriverManager.getConnection(DB_URL);
     }
 
+    
     private boolean validateSession(String encryptedToken) throws RemoteException {
-        String decryptedToken = TokenEncryption.decrypt(encryptedToken);
+        String decryptedToken = TokenEncryption.decrypt(encryptedToken); //decrypt to get original token
         Long expirationTime = activeSessions.get(encryptedToken);
 
-        if (expirationTime == null) {
-            System.out.println("Session token not found: " + decryptedToken);
+        if (expirationTime == null) { //session token not found
             throw new RemoteException("Session token not found. Please log in again.");
         }
 
-        if (System.currentTimeMillis() > expirationTime) {
-            activeSessions.remove(encryptedToken);
+        if (System.currentTimeMillis() > expirationTime) { //checks if the time of the token is out
+            activeSessions.remove(encryptedToken); //removes expired token
             System.out.println("Session token expired: " + decryptedToken);
             throw new RemoteException("Session expired. Please log in again.");
         }
 
-        // Fornyer utløpstid for aktiv sesjon
+        // token is valid, expiration time is renewed  
         activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
         return true;
     }
@@ -85,11 +85,11 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         throw new RuntimeException("Error hashing password", e);
     }
 }
-private String generateSecureSessionToken() {
-    SecureRandom secureRandom = new SecureRandom();
-    byte[] randomBytes = new byte[32]; // 256-bit token
-    secureRandom.nextBytes(randomBytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+private String generateSecureSessionToken() { //GENERATE SESSIONTOKEN
+    SecureRandom secureRandom = new SecureRandom(); // initializes a secure random number generator
+    byte[] randomBytes = new byte[32]; // 256-bit token (32 bytes) (Creates a byte array)
+    secureRandom.nextBytes(randomBytes); // fills the byte array
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes); // encodes the byte array into a Base64 string
 }
 
 @Override
@@ -100,7 +100,7 @@ public boolean authenticateUser(String username, String plainPassword) throws Re
         try (ResultSet rs = stmt.executeQuery()) {
             if (rs.next()) {
                 String storedPassword = rs.getString("password");
-                return hashPassword(plainPassword).equals(storedPassword); // Compare hashed passwords
+                return hashPassword(plainPassword).equals(storedPassword); // compare hashed passwords
             }
         }
     } catch (SQLException e) {
@@ -162,12 +162,12 @@ public boolean updatePassword(String username, String oldPassword, String newPas
         }
     }
 
-    @Override //encrypted
+    @Override //Log in
     public String login(String username, String password) throws RemoteException {
-        if (authenticateUser(username, password)) {
-            String sessionToken = generateSecureSessionToken();
-            String encryptedToken = TokenEncryption.encrypt(sessionToken);
-            activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
+        if (authenticateUser(username, password)) { //if user is authenticated
+            String sessionToken = generateSecureSessionToken(); // generate a session token
+            String encryptedToken = TokenEncryption.encrypt(sessionToken); // encrypt token
+            activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT); 
             System.out.println("Login successful. Session token (encrypted): " + encryptedToken);
             System.out.println("Session token (not encrypted): " + sessionToken);
             return encryptedToken;
@@ -177,7 +177,7 @@ public boolean updatePassword(String username, String oldPassword, String newPas
 
     @Override
     public void logout(String sessionToken) throws RemoteException {
-        if (activeSessions.remove(sessionToken) != null) {
+        if (activeSessions.remove(sessionToken) != null) { 
             System.out.println("Session " + sessionToken + " has been logged out.");
         } else {
             System.out.println("Invalid session token. Logout failed.");

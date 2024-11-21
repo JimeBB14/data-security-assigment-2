@@ -17,6 +17,7 @@ public class PasswordManagerServer {
 }
 
 // ALL RUN FROM demo/src/main/java
+
 // COMPILE: javac com/storage/client/*.java com/storage/server/*.java
 
 // SERVER: java -classpath ".:sqlite-jdbc-3.47.0.0.jar" -Djava.rmi.server.hostname=localhost com.storage.server.PasswordManagerServer
