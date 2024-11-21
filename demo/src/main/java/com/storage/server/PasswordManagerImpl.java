@@ -4,6 +4,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -11,10 +12,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import com.storage.server.TokenEncryption;
 
 public class PasswordManagerImpl extends UnicastRemoteObject implements PasswordManager {
     private static final String DB_URL = "jdbc:sqlite:user_management.db";
@@ -47,24 +49,26 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         return DriverManager.getConnection(DB_URL);
     }
 
-    private boolean validateSession(String sessionToken) throws RemoteException {
-        Long expirationTime = activeSessions.get(sessionToken);
+    private boolean validateSession(String encryptedToken) throws RemoteException {
+        String decryptedToken = TokenEncryption.decrypt(encryptedToken);
+        Long expirationTime = activeSessions.get(encryptedToken);
 
         if (expirationTime == null) {
-            System.out.println("Session token not found: " + sessionToken);
+            System.out.println("Session token not found: " + decryptedToken);
             throw new RemoteException("Session token not found. Please log in again.");
         }
 
         if (System.currentTimeMillis() > expirationTime) {
-            activeSessions.remove(sessionToken);
-            System.out.println("Session token expired: " + sessionToken);
+            activeSessions.remove(encryptedToken);
+            System.out.println("Session token expired: " + decryptedToken);
             throw new RemoteException("Session expired. Please log in again.");
         }
 
         // Fornyer utløpstid for aktiv sesjon
-        activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
+        activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
         return true;
     }
+
 
     private String hashPassword(String plainPassword) {
     try {
@@ -80,6 +84,12 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     } catch (NoSuchAlgorithmException e) {
         throw new RuntimeException("Error hashing password", e);
     }
+}
+private String generateSecureSessionToken() {
+    SecureRandom secureRandom = new SecureRandom();
+    byte[] randomBytes = new byte[32]; // 256-bit token
+    secureRandom.nextBytes(randomBytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
 }
 
 @Override
@@ -152,13 +162,15 @@ public boolean updatePassword(String username, String oldPassword, String newPas
         }
     }
 
-    @Override
+    @Override //encrypted
     public String login(String username, String password) throws RemoteException {
         if (authenticateUser(username, password)) {
-            String sessionToken = UUID.randomUUID().toString();
-            activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
-            System.out.println("Login successful. Session token: " + sessionToken);
-            return sessionToken;
+            String sessionToken = generateSecureSessionToken();
+            String encryptedToken = TokenEncryption.encrypt(sessionToken);
+            activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
+            System.out.println("Login successful. Session token (encrypted): " + encryptedToken);
+            System.out.println("Session token (not encrypted): " + sessionToken);
+            return encryptedToken;
         }
         return null;
     }
