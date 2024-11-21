@@ -8,12 +8,10 @@ import com.storage.server.PasswordManager;
 public class PasswordManagerClient {
     public static void main(String[] args) {
         try {
-            // Connect to the RMI registry and look up the PasswordManager service
+            
             Registry registry = LocateRegistry.getRegistry("localhost", 1101);
             PasswordManager manager = (PasswordManager) registry.lookup("PasswordManager");
 
-
-            // Check if the database is empty and clear it if it is not
             if (!manager.isDatabaseEmpty()) {
                 System.out.println("The database is not empty. Proceeding to clear it...");
                 manager.clearUsers();
@@ -21,12 +19,10 @@ public class PasswordManagerClient {
                 System.out.println("The database is already empty.");
             }
 
-            // List of test users
             String[] usernames = {"Alice", "Bob", "Cecilia", "Erica", "David","Fred","George"};
             String initialPassword = "password123";
             String newPassword = "newPassword456";
 
-            // Create multiple users
             System.out.println("=== Creating Users ===");
             for (String username : usernames) {
                 try {
@@ -37,7 +33,6 @@ public class PasswordManagerClient {
                 }
             }
 
-            // Change password for each user
             System.out.println("\n=== Changing Passwords ===");
             for (String username : usernames) {
                 try {
@@ -48,7 +43,7 @@ public class PasswordManagerClient {
                 }
             }
 
-            // Final verification: confirm that users exist with the new password
+
             System.out.println("\n=== Final Verification: Users Present in Database ===");
             for (String username : usernames) {
                 try {

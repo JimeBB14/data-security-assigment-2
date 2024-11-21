@@ -47,39 +47,42 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         return DriverManager.getConnection(DB_URL);
     }
 
-    private boolean validateSession(String sessionToken) throws RemoteException {
+    private String validateSession(String sessionToken) throws RemoteException {
         System.out.println("Debug: Validating session token: " + sessionToken);
         Long expirationTime = activeSessions.get(sessionToken);
-
+    
         if (expirationTime == null) {
             System.out.println("Session token not found: " + sessionToken);
             throw new RemoteException("Session token not found. Please log in again.");
         }
-
+    
         if (System.currentTimeMillis() > expirationTime) {
             System.out.println("Debug: Session token expired: " + sessionToken);
             activeSessions.remove(sessionToken);
-            sessionUserMap.remove(sessionToken);
+            sessionUserMap.remove(sessionToken); // Ensure the user mapping is also cleaned up
             throw new RemoteException("Session expired. Please log in again.");
         }
-
+    
         // Renew session expiration time
         activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
         System.out.println("Session renewed for token: " + sessionToken);
-        return true;
+    
+        // Return the username associated with this session token
+        return sessionUserMap.get(sessionToken); // Ensure sessionUserMap is properly maintained
     }
-
-    // Check if the user associated with the sessionToken has permission for the action
+    
     private void checkPermission(String sessionToken, String action) throws RemoteException {
-        System.out.println("Debug: Checking permission for action: " + action + " with session token: " + sessionToken);
-        validateSession(sessionToken);
-        String username = sessionUserMap.get(sessionToken);
-
-        if (username == null || !PasswordManagerServer.hasPermission(username, action)) {
-            System.out.println("Debug: Access denied for user: " + username + " for action: " + action);
-            throw new RemoteException("Access Denied: " + username + " does not have permission for action " + action);
+        String user = validateSession(sessionToken); 
+        boolean hasPermission = PasswordManagerServer.hasPermission(user, action);
+    
+        if (!hasPermission) {
+            System.out.println("Unauthorized access: User " + user + " does not have permission for action: " + action);
+            throw new RemoteException("Access denied for user: " + user + " for action: " + action);
         }
     }
+    
+    
+    
 
     @Override
     public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
@@ -89,7 +92,7 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
             stmt.setString(1, username);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    String storedPassword = rs.getString("password"); // Retrieve hashed password
+                    String storedPassword = rs.getString("password"); 
                     return HashingUtil.validatePassword(plainPassword, storedPassword);
                 } else {
                     System.out.println("Debug: User was not found in the database.");
@@ -108,10 +111,10 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
             String query = "UPDATE users SET password = ? WHERE username = ?";
             try (Connection conn = getConnection();
                  PreparedStatement stmt = conn.prepareStatement(query)) {
-                // Hash the new password
+                
                 byte[] salt = HashingUtil.generateSalt();
                 String hashedPassword = HashingUtil.hashPassword(newPassword, salt);
-                // Update the password
+               
                 stmt.setString(1, hashedPassword);
                 stmt.setString(2, username);
                 int rowsAffected = stmt.executeUpdate();
@@ -132,10 +135,9 @@ public boolean addUser(String username, String password) throws RemoteException 
     String query = "INSERT INTO users (username, password) VALUES (?, ?)";
     try (Connection conn = getConnection();
          PreparedStatement stmt = conn.prepareStatement(query)) {
-        // Hash the password
+        
         byte[] salt = HashingUtil.generateSalt();
         String hashedPassword = HashingUtil.hashPassword(password, salt);
-        // Store the username and hashed password
         stmt.setString(1, username);
         stmt.setString(2, hashedPassword);
         int rowsAffected = stmt.executeUpdate();
@@ -171,7 +173,7 @@ public boolean addUser(String username, String password) throws RemoteException 
             activeSessions.entrySet().removeIf(entry -> sessionUserMap.get(entry.getKey()).equals(username));
             sessionUserMap.values().removeIf(value -> value.equals(username));
     
-            // Generate a new session token
+        
             String sessionToken = UUID.randomUUID().toString();
             activeSessions.put(sessionToken, System.currentTimeMillis() + SESSION_TIMEOUT);
             sessionUserMap.put(sessionToken, username);

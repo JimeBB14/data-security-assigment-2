@@ -32,7 +32,7 @@ public class PrintClient {
             
                 while (true) {
                     System.out.println("\nChoose an action: print, queue, status, or logout");
-                    String action = scanner.nextLine().toLowerCase();
+                    String action = scanner.nextLine();
 
                     try{ 
                         switch (action) {
@@ -48,26 +48,51 @@ public class PrintClient {
                                 printServer.status("Printer1", sessionToken);
                                 System.out.println("Status method completed.");
                                 break;
+                            case "stop":
+                                printServer.stop(sessionToken);
+                                System.out.println("Stop method completed.");
+                                break;
+                            case "restart":
+                                printServer.restart(sessionToken);
+                                System.out.println("Restart method completed.");
+                                break;
+                            case "topQueue":
+                                printServer.topQueue("Printer1", 0, sessionToken);
+                                System.out.println("topQueue method completed.");
+                                break;
+                            case "readConfig":
+                                printServer.readConfig("Printer1", sessionToken);
+                                System.out.println("topQueue method completed.");
+                                break;
+                            case "setConfig":
+                                printServer.setConfig("Printer1", "Printer1", sessionToken);
+                                System.out.println("topQueue method completed.");
+                                break;
                             case "logout":
                                 printServer.logout(sessionToken);
                                 System.out.println("Logged out successfully.");
-                                sessionToken = null; // Nullstiller token
+                                sessionToken = null;
                                 break;
                             default:
                                 System.out.println("Invalid action. Please try again.");
                                 break;
                         }
                         if (action.equals("logout")) {
-                            break; // Gå ut av indre løkke når brukeren logger ut
+                            break; 
                         }
                     }
-                    catch (RemoteException e){
-                        System.out.println("Session expired or invalid. Please log in again.");
-                        break;
+                    catch (RemoteException e) {
+                        System.out.println("Action could not be completed: " + e.getMessage());
+                        if (e.getMessage().contains("Access denied")) {
+                            System.out.println("Unauthorized access. Please choose another action.");
+                        } else {
+                            System.out.println("Session expired or invalid. Please log in again.");
+                            break;
+                        }
                     }
                 }
                 if (sessionToken == null) {
-                    // Hvis brukeren logger ut manuelt, gå ut av ytre løkke også
+                    
                     break;
                 }
             }
