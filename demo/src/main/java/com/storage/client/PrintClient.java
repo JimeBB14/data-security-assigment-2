@@ -9,8 +9,9 @@ public class PrintClient {
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-      
-        String sessionToken = null;
+        String host = "localhost"; // or server IP
+        String sessionToken = null; //initialize session token
+
         try {
             Registry registry = LocateRegistry.getRegistry("localhost", 1101);
             PasswordManager printServer = (PasswordManager) registry.lookup("PasswordManager");
@@ -20,15 +21,17 @@ public class PrintClient {
                 String username = scanner.nextLine();
                 System.out.print("Enter password: ");
                 String password = scanner.nextLine();
+
                 
                 System.out.println("Debug: Attempting to log in with username: " + username);
-                sessionToken = printServer.login(username, password);
+                sessionToken = printServer.login(username, password); //get sessionToken from server
 
-                if (sessionToken == null) {
+
+                if (sessionToken == null) { // login failed
                     System.out.println("Login failed. Please check your credentials.");
                     return;
                     }
-                System.out.println("Login successful. Session token: " + sessionToken);
+                System.out.println("Login successful. Session token: " + sessionToken); //login successfull
             
                 while (true) {
                     System.out.println("\nChoose an action: print, queue, status, or logout");
@@ -71,14 +74,17 @@ public class PrintClient {
                             case "logout":
                                 printServer.logout(sessionToken);
                                 System.out.println("Logged out successfully.");
-                                sessionToken = null;
+                                sessionToken = null; // sets token to null --> log out = end session
+
                                 break;
                             default:
                                 System.out.println("Invalid action. Please try again.");
                                 break;
                         }
                         if (action.equals("logout")) {
-                            break; 
+
+                            break; // exit inner loop if user logout
+
                         }
                     }
                     catch (RemoteException e) {
@@ -92,7 +98,6 @@ public class PrintClient {
                     }
                 }
                 if (sessionToken == null) {
-                    
                     break;
                 }
             }
