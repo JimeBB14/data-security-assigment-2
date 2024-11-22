@@ -51,6 +51,10 @@ public class PrintClient {
                                 printServer.status("Printer1", sessionToken);
                                 System.out.println("Status method completed.");
                                 break;
+                            case "start":
+                                printServer.start(sessionToken);
+                                System.out.println("Start method completed.");
+                                break;
                             case "stop":
                                 printServer.stop(sessionToken);
                                 System.out.println("Stop method completed.");

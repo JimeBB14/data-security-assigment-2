@@ -1,4 +1,4 @@
-Manager: ALL
+Manager: print, queue, topQueue, start, stop, restart, status, readConfig, setConfig
 ServiceTechnician: start, stop, restart
 Janitor: status, readConfig, setConfig
 PowerUser: print, queue, topQueue, restart

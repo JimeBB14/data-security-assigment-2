@@ -55,10 +55,10 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     }
 
     private String validateSession(String encryptedToken) throws RemoteException {
-        String decryptedToken = TokenEncryption.decrypt(encryptedToken); // Decrypt to get original token
-        Long expirationTime = activeSessions.get(decryptedToken); // Use decrypted token as key
+        String decryptedToken = TokenEncryption.decrypt(encryptedToken); 
+        Long expirationTime = activeSessions.get(decryptedToken); 
     
-        if (expirationTime == null) { // Session token not found
+        if (expirationTime == null) { 
             throw new RemoteException("Session token not found. Please log in again.");
         }
     
@@ -70,33 +70,37 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     
         // Renew session expiration time
         activeSessions.put(decryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
-        return sessionUserMap.get(decryptedToken); // Return the username associated with the session
+        return sessionUserMap.get(decryptedToken); 
     }
-    
     
     private void checkPermission(String encryptedToken, String action) throws RemoteException {
-    String user = validateSession(encryptedToken); // Validate session and get username
+        String user = validateSession(encryptedToken); 
     
-    // Get all roles assigned to the user
-    Set<String> userRoles = PasswordManagerServer.getUserRoles(user);
-    if (userRoles == null || userRoles.isEmpty()) {
-        throw new RemoteException("Access denied for user: " + user + ". No roles assigned.");
-    }
-
-    // Aggregate permissions from all roles
-    Set<String> aggregatedPermissions = new HashSet<>();
-    for (String role : userRoles) {
-        Set<String> rolePermissions = PasswordManagerServer.getRolePermissions(role);
-        if (rolePermissions != null) {
-            aggregatedPermissions.addAll(rolePermissions);
+       
+        Set<String> userRoles = PasswordManagerServer.getUserRoles(user);
+        if (userRoles == null || userRoles.isEmpty()) {
+            throw new RemoteException("Access denied for user: " + user + ". No roles assigned.");
+        }
+    
+        // Aggregate permissions from all roles
+        Set<String> aggregatedPermissions = new HashSet<>();
+        for (String role : userRoles) {
+            Set<String> rolePermissions = PasswordManagerServer.getRolePermissions(role);
+            if (rolePermissions != null) {
+                aggregatedPermissions.addAll(rolePermissions);
+            }
+        }
+    
+        System.out.println("Aggregated permissions for user " + user + ": " + aggregatedPermissions); // Debugging
+    
+        
+        if (!aggregatedPermissions.contains(action) && !aggregatedPermissions.contains("ALL")) {
+            throw new RemoteException("Access denied for user: " + user + " for action: " + action);
         }
     }
-
-    // Check if the action is allowed
-    if (!aggregatedPermissions.contains(action)) {
-        throw new RemoteException("Access denied for user: " + user + " for action: " + action);
-    }
-}
+    
+    
+    
 
     
     

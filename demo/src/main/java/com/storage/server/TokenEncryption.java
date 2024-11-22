@@ -7,10 +7,10 @@ import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 
 public class TokenEncryption {
-    private static final String ENCRYPTION_ALGORITHM = "AES"; //define encryption algorithm 
-    private static final SecretKey SECRET_KEY = generateKey(); //secret key
+    private static final String ENCRYPTION_ALGORITHM = "AES";
+    private static final SecretKey SECRET_KEY = generateKey(); 
 
-    // Generates an encryption key during initialization
+    
     private static SecretKey generateKey() {
         try {
             KeyGenerator keyGen = KeyGenerator.getInstance(ENCRYPTION_ALGORITHM);
@@ -21,13 +21,13 @@ public class TokenEncryption {
         }
     }
 
-    // Encrypting token
+
     public static String encrypt(String data) {
         try {
-            Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM); //initializes cipher
-            cipher.init(Cipher.ENCRYPT_MODE, SECRET_KEY); //configures cipher
-            byte[] encryptedBytes = cipher.doFinal(data.getBytes()); //encrypts data
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(encryptedBytes); //Base64
+            Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM); 
+            cipher.init(Cipher.ENCRYPT_MODE, SECRET_KEY); 
+            byte[] encryptedBytes = cipher.doFinal(data.getBytes()); 
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(encryptedBytes); 
         } catch (Exception e) {
             throw new RuntimeException("Error encrypting data", e);
         }
@@ -36,10 +36,10 @@ public class TokenEncryption {
     // Decrypt token
     public static String decrypt(String encryptedData) {
         try {
-            Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM); //initializes cipher
-            cipher.init(Cipher.DECRYPT_MODE, SECRET_KEY); //configures cipher
-            byte[] decryptedBytes = cipher.doFinal(Base64.getUrlDecoder().decode(encryptedData)); //decodes/decrypts data
-            return new String(decryptedBytes); //converts back to string
+            Cipher cipher = Cipher.getInstance(ENCRYPTION_ALGORITHM); 
+            cipher.init(Cipher.DECRYPT_MODE, SECRET_KEY); 
+            byte[] decryptedBytes = cipher.doFinal(Base64.getUrlDecoder().decode(encryptedData)); 
+            return new String(decryptedBytes); 
         } catch (Exception e) {
             throw new RuntimeException("Error decrypting data", e);
         }

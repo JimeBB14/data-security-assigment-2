@@ -113,49 +113,59 @@ public static String readDecryptedPolicy(String filePath) {
         return null;
     }
 }
+public static void loadRoles(String filePath) {
+    try (InputStream input = PasswordManagerServer.class.getClassLoader().getResourceAsStream(filePath);
+         BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
+        String line;
+        while ((line = br.readLine()) != null) {
+            if (line.startsWith("#") || line.trim().isEmpty()) continue;
 
-    public static void loadRoles(String filePath) {
-        try (InputStream input = PasswordManagerServer.class.getClassLoader().getResourceAsStream(filePath);
-             BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                if (line.startsWith("#") || line.trim().isEmpty()) continue;
-
-                String[] parts = line.split(":");
-                String role = parts[0].trim();
-                String[] permissions = parts[1].trim().split(",");
-                Set<String> permissionsSet = new HashSet<>();
-                for (String permission : permissions) {
+            String[] parts = line.split(":");
+            String role = parts[0].trim();
+            String[] permissions = parts[1].trim().split(",");
+            Set<String> permissionsSet = new HashSet<>();
+            for (String permission : permissions) {
+                if ("ALL".equals(permission.trim())) {
+                    permissionsSet.add("ALL"); 
+                } else {
                     permissionsSet.add(permission.trim());
                 }
-                rolePermissions.put(role, permissionsSet);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            rolePermissions.put(role, permissionsSet);
         }
+    } catch (Exception e) {
+        e.printStackTrace();
     }
+}
 
-    public static void loadUserRoles(String filePath) {
-        try (InputStream input = PasswordManagerServer.class.getClassLoader().getResourceAsStream(filePath);
-             BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                if (line.startsWith("#") || line.trim().isEmpty()) continue;
-    
-                String[] parts = line.split(":");
-                String user = parts[0].trim();
-                String[] roles = parts[1].trim().split(",");
-                Set<String> roleSet = new HashSet<>();
-                for (String role : roles) {
-                    roleSet.add(role.trim());
-                }
-                userRoles.put(user, roleSet);
+public static void loadUserRoles(String filePath) {
+    try (InputStream input = PasswordManagerServer.class.getClassLoader().getResourceAsStream(filePath);
+         BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
+        String line;
+        while ((line = br.readLine()) != null) {
+            if (line.startsWith("#") || line.trim().isEmpty()) continue;
+
+            String[] parts = line.split(":");
+            String user = parts[0].trim();
+            String[] roles = parts[1].trim().split(",");
+            Set<String> roleSet = new HashSet<>();
+            for (String role : roles) {
+                roleSet.add(role.trim());
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            userRoles.put(user, roleSet);
+
+            // Debugging output
+            System.out.println("Loaded roles for user " + user + ": " + roleSet);
         }
+        System.out.println("User Roles Map: " + userRoles);
+
+    } catch (Exception e) {
+        e.printStackTrace();
     }
-    
+}
+
+
+
 
    public static void loadACL(String filePath) {
     try {
@@ -180,38 +190,41 @@ public static String readDecryptedPolicy(String filePath) {
         e.printStackTrace();
     }
 }
+public static Set<String> getUserRoles(String user) {
+    Set<String> roles = userRoles.getOrDefault(user, new HashSet<>());
+    System.out.println("Retrieved roles for user " + user + ": " + roles); 
+    return roles;
+}
+
+
+public static Set<String> getRolePermissions(String role) {
+    return rolePermissions.getOrDefault(role, new HashSet<>());
+}
 
 
 public static boolean hasPermission(String user, String action) {
-    if (useACL) {
-        // ACL mode: Permissions are directly mapped to the user
-        Set<String> permissions = aclPermissions.get(user);
-        if (permissions == null || !permissions.contains(action)) {
-            System.out.println("Unauthorized access: User " + user + " does not have permission for action: " + action);
-            return false;
-        }
-    } else {
-        // RBAC mode: Permissions are mapped to roles
-        Set<String> roles = userRoles.get(user);
-        if (roles == null || roles.isEmpty()) {
-            System.out.println("Unauthorized access: User " + user + " does not have any roles assigned.");
-            return false;
-        }
-
-        // Combine permissions for all roles
-        for (String role : roles) {
-            Set<String> permissions = rolePermissions.get(role);
-            if (permissions != null && (permissions.contains(action) || permissions.contains("ALL"))) {
-                return true; // User has the required permission through one of their roles
-            }
-        }
-
-        // If no role grants the required permission
-        System.out.println("Unauthorized access: User " + user + " does not have permission for action: " + action);
+    Set<String> roles = userRoles.get(user); 
+    if (roles == null || roles.isEmpty()) {
+        System.out.println("Unauthorized access: User " + user + " has no roles assigned.");
         return false;
     }
-    return true;
+
+    for (String role : roles) {
+       
+        if ("Manager".equals(role)) {
+            return true; 
+        }
+
+        Set<String> permissions = rolePermissions.get(role); 
+        if (permissions != null && permissions.contains(action)) {
+            return true; 
+        }
+    }
+
+    System.out.println("Unauthorized access: User " + user + " does not have permission for action: " + action);
+    return false;
 }
+
 
 
 private static void decryptOnShutdown() {
