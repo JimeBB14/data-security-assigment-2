@@ -14,8 +14,11 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 import com.storage.server.TokenEncryption;
 
 import com.storage.util.HashingUtil;
@@ -72,13 +75,29 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
     
     
     private void checkPermission(String encryptedToken, String action) throws RemoteException {
-        String user = validateSession(encryptedToken); // Validate session and get username
-        boolean hasPermission = PasswordManagerServer.hasPermission(user, action); // Check permissions
+    String user = validateSession(encryptedToken); // Validate session and get username
     
-        if (!hasPermission) {
-            throw new RemoteException("Access denied for user: " + user + " for action: " + action);
+    // Get all roles assigned to the user
+    Set<String> userRoles = PasswordManagerServer.getUserRoles(user);
+    if (userRoles == null || userRoles.isEmpty()) {
+        throw new RemoteException("Access denied for user: " + user + ". No roles assigned.");
+    }
+
+    // Aggregate permissions from all roles
+    Set<String> aggregatedPermissions = new HashSet<>();
+    for (String role : userRoles) {
+        Set<String> rolePermissions = PasswordManagerServer.getRolePermissions(role);
+        if (rolePermissions != null) {
+            aggregatedPermissions.addAll(rolePermissions);
         }
     }
+
+    // Check if the action is allowed
+    if (!aggregatedPermissions.contains(action)) {
+        throw new RemoteException("Access denied for user: " + user + " for action: " + action);
+    }
+}
+
     
     
     private String hashPassword(String plainPassword) {
