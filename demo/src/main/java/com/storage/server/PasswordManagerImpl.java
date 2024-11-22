@@ -30,7 +30,7 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         initializeDatabase();
     }
 
-    // Método para inicializar la base de datos y crear la tabla si no existe
+    // Method to initialize the database and create the table if it does not exist
     private void initializeDatabase() {
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
             String createTableSQL = "CREATE TABLE IF NOT EXISTS users (" +
@@ -44,92 +44,89 @@ public class PasswordManagerImpl extends UnicastRemoteObject implements Password
         }
     }
 
-    // Método de conexión a la base de datos
+    // Method to connect to the database
     private Connection getConnection() throws SQLException {
         return DriverManager.getConnection(DB_URL);
     }
-
     
     private boolean validateSession(String encryptedToken) throws RemoteException {
-        String decryptedToken = TokenEncryption.decrypt(encryptedToken); //decrypt to get original token
+        String decryptedToken = TokenEncryption.decrypt(encryptedToken); // Decrypt to get original token
         Long expirationTime = activeSessions.get(encryptedToken);
 
-        if (expirationTime == null) { //session token not found
+        if (expirationTime == null) { // Session token not found
             throw new RemoteException("Session token not found. Please log in again.");
         }
 
-        if (System.currentTimeMillis() > expirationTime) { //checks if the time of the token is out
-            activeSessions.remove(encryptedToken); //removes expired token
+        if (System.currentTimeMillis() > expirationTime) { // Checks if the token has expired
+            activeSessions.remove(encryptedToken); // Removes expired token
             System.out.println("Session token expired: " + decryptedToken);
             throw new RemoteException("Session expired. Please log in again.");
         }
 
-        // token is valid, expiration time is renewed  
+        // Token is valid, renew expiration time  
         activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT);
         return true;
     }
 
-
     private String hashPassword(String plainPassword) {
-    try {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] hash = digest.digest(plainPassword.getBytes());
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : hash) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
-        }
-        return hexString.toString();
-    } catch (NoSuchAlgorithmException e) {
-        throw new RuntimeException("Error hashing password", e);
-    }
-}
-private String generateSecureSessionToken() { //GENERATE SESSIONTOKEN
-    SecureRandom secureRandom = new SecureRandom(); // initializes a secure random number generator
-    byte[] randomBytes = new byte[32]; // 256-bit token (32 bytes) (Creates a byte array)
-    secureRandom.nextBytes(randomBytes); // fills the byte array
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes); // encodes the byte array into a Base64 string
-}
-
-@Override
-public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
-    String query = "SELECT password FROM users WHERE username = ?";
-    try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
-        stmt.setString(1, username);
-        try (ResultSet rs = stmt.executeQuery()) {
-            if (rs.next()) {
-                String storedPassword = rs.getString("password");
-                return hashPassword(plainPassword).equals(storedPassword); // compare hashed passwords
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(plainPassword.getBytes());
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
             }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error hashing password", e);
         }
-    } catch (SQLException e) {
-        System.err.println("Error during authentication.");
-        e.printStackTrace();
     }
-    return false;
-}
 
-
-@Override
-public boolean updatePassword(String username, String oldPassword, String newPassword) throws RemoteException {
-    if (authenticateUser(username, oldPassword)) {
-        String query = "UPDATE users SET password = ? WHERE username = ?";
+    private String generateSecureSessionToken() { // GENERATE SESSION TOKEN
+        SecureRandom secureRandom = new SecureRandom(); // Initializes a secure random number generator
+        byte[] randomBytes = new byte[32]; // 256-bit token (32 bytes) (Creates a byte array)
+        secureRandom.nextBytes(randomBytes); // Fills the byte array
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes); // Encodes the byte array into a Base64 string
+    }
+    
+    @Override
+    public boolean authenticateUser(String username, String plainPassword) throws RemoteException {
+        String query = "SELECT password FROM users WHERE username = ?";
         try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, hashPassword(newPassword)); // Hash the new password
-            stmt.setString(2, username);
-            return stmt.executeUpdate() > 0;
+            stmt.setString(1, username);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    String storedPassword = rs.getString("password");
+                    return hashPassword(plainPassword).equals(storedPassword); // Compare hashed passwords
+                }
+            }
         } catch (SQLException e) {
-            System.err.println("Error updating password.");
+            System.err.println("Error during authentication.");
             e.printStackTrace();
         }
-    } else {
-        System.err.println("Old password is incorrect.");
+        return false;
     }
-    return false;
-}
-
-
+    
+    @Override
+    public boolean updatePassword(String username, String oldPassword, String newPassword) throws RemoteException {
+        if (authenticateUser(username, oldPassword)) {
+            String query = "UPDATE users SET password = ? WHERE username = ?";
+            try (Connection conn = getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setString(1, hashPassword(newPassword)); // Hash the new password
+                stmt.setString(2, username);
+                return stmt.executeUpdate() > 0;
+            } catch (SQLException e) {
+                System.err.println("Error updating password.");
+                e.printStackTrace();
+            }
+        } else {
+            System.err.println("Old password is incorrect.");
+        }
+        return false;
+    }
+    
     @Override
     public boolean addUser(String username, String plainPassword) throws RemoteException {
         String query = "INSERT INTO users (username, password) VALUES (?, ?)";
@@ -154,7 +151,7 @@ public boolean updatePassword(String username, String oldPassword, String newPas
             stmt.setString(1, username);
             int rowsAffected = stmt.executeUpdate();
 
-            return rowsAffected > 0; // Devuelve true si se eliminó el usuario
+            return rowsAffected > 0; // Returns true if the user was deleted
         } catch (SQLException e) {
             System.err.println("Error deleting user.");
             e.printStackTrace();
@@ -162,11 +159,11 @@ public boolean updatePassword(String username, String oldPassword, String newPas
         }
     }
 
-    @Override //Log in
+    @Override // Log in
     public String login(String username, String password) throws RemoteException {
-        if (authenticateUser(username, password)) { //if user is authenticated
-            String sessionToken = generateSecureSessionToken(); // generate a session token
-            String encryptedToken = TokenEncryption.encrypt(sessionToken); // encrypt token
+        if (authenticateUser(username, password)) { // If user is authenticated
+            String sessionToken = generateSecureSessionToken(); // Generate a session token
+            String encryptedToken = TokenEncryption.encrypt(sessionToken); // Encrypt token
             activeSessions.put(encryptedToken, System.currentTimeMillis() + SESSION_TIMEOUT); 
             System.out.println("Login successful. Session token (encrypted): " + encryptedToken);
             System.out.println("Session token (not encrypted): " + sessionToken);
@@ -236,16 +233,18 @@ public boolean updatePassword(String username, String oldPassword, String newPas
         }
         return users;
     }
+    
     // PRINT SERVER
     @Override
     public void print(String filename, String printer, String sessionToken) throws RemoteException {
-        System.out.println("This is the users in the database" + getAllUsers());
+        System.out.println("These are the users in the database: " + getAllUsers());
         if (validateSession(sessionToken)) {
             System.out.println("Printing " + filename + " on " + printer);
         } else {
             throw new RemoteException("Session expired or invalid.");
         }
     }
+
     @Override
     public void queue(String printer, String sessionToken) throws RemoteException {
         if (validateSession(sessionToken)) {
@@ -303,6 +302,4 @@ public boolean updatePassword(String username, String oldPassword, String newPas
             System.out.println("Setting config " + parameter + " to " + value);
         }
     }
-
-
 }
